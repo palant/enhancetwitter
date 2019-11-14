@@ -1,0 +1,14 @@
+{
+  "name": {
+    "message": "Enhance Twitter"
+  },
+  "description": {
+    "message": "Adds \"Like Thread\" and \"Mass Block\" functionality to Twitter."
+  },
+  "like_thread_title": {
+    "message": "Like thread"
+  },
+  "block_all_title": {
+    "message": "Block all"
+  }
+}
