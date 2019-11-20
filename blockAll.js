@@ -17,7 +17,7 @@
   for (let profile of document.querySelectorAll(".AppContainer .ProfileCard"))
   {
     let actions = profile.querySelector(".user-actions");
-    if (actions.classList.contains("blocked"))
+    if (!actions || actions.classList.contains("blocked"))
       continue;
 
     data.set("user_id", profile.dataset.userId);
