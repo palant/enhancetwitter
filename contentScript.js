@@ -24,15 +24,10 @@ function reportErrors(callback)
 
 function implementLikeThread()
 {
-  const actionClass = "ProfileTweet-action--enhanced-favorite-thread";
-  const threadSelector = `
-    .tweet.ancestor,
-    .tweet.js-original-tweet,
-    .ThreadedConversation--selfThread .tweet.descendant
-  `;
+  const actionClass = "enhancetwitter-favorite-thread";
 
   let action = null;
-  let body = document.querySelector(".PermalinkOverlay-body");
+  let body = document.getElementById("react-root");
   if (!body)
     return;
 
@@ -52,14 +47,37 @@ function implementLikeThread()
     return [...nodes].every(node => node.classList.contains(actionClass));
   }
 
+  function getUsername(tweet)
+  {
+    return tweet.querySelector("a").getAttribute("href").replace(/^\//, "");
+  }
+
+  function* selectThread()
+  {
+    let tweets = document.querySelectorAll("article");
+    if (!tweets.length)
+      return;
+
+    let username = getUsername(tweets[0]);
+    yield tweets[0];
+    for (let i = 1; i < tweets.length; i++)
+    {
+      if (getUsername(tweets[i]) == username)
+        yield tweets[i];
+      else
+        return;
+    }
+  }
+
   function likeThread(event, doLike)
   {
     event.preventDefault();
 
-    for (let tweet of document.querySelectorAll(threadSelector))
+    for (let tweet of selectThread())
     {
-      if (tweet.classList.contains("favorited") != doLike)
-        tweet.querySelector(".ProfileTweet-actionButton.js-actionFavorite").click();
+      let button = tweet.querySelector(doLike ? "[data-testid=like]" : "[data-testid=unlike]");
+      if (button)
+        button.click();
     }
   }
 
@@ -68,13 +86,13 @@ function implementLikeThread()
     if (mutationList.every(isOwnMutation))
       return;
 
-    let tweets = body.querySelectorAll(threadSelector);
+    let tweets = [...selectThread()];
     if (tweets.length < 2)
       return;
 
     let favorited = 0;
     for (let tweet of tweets)
-      if (tweet.classList.contains("favorited"))
+      if (tweet.querySelector("[data-testid=unlike]"))
         favorited++;
 
     let root = tweets[0];
@@ -85,33 +103,24 @@ function implementLikeThread()
       action.parentNode.removeChild(action);
     }
 
-    action = document.createElement("div");
-    action.className = "ProfileTweet-action " + actionClass;
+    let template = root.querySelector("[data-testid=like],[data-testid=unlike]").parentNode;
+    action = template.cloneNode(true);
+    action.classList.add(actionClass);
     action._set = (favorited == tweets.length);
+    action.addEventListener("click", reportErrors(event => likeThread(event, !action._set)));
 
-    let button = document.createElement("button");
-    button.className = "ProfileTweet-actionButton";
-    button.addEventListener("click", reportErrors(event => likeThread(event, !action._set)));
-    action.appendChild(button);
+    let path = action.querySelector("path");
+    if (action._set)
+      path.setAttribute("d", "M12 21.638h-.014C9.403 21.59 1.95 14.856 1.95 8.478c0-3.064 2.525-5.754 5.403-5.754 2.29 0 3.83 1.58 4.646 2.73.814-1.148 2.354-2.73 4.645-2.73 2.88 0 5.404 2.69 5.404 5.755 0 6.376-7.454 13.11-10.037 13.157H12z");
+    else
+      path.setAttribute("d", "M12 21.638h-.014C9.403 21.59 1.95 14.856 1.95 8.478c0-3.064 2.525-5.754 5.403-5.754 2.29 0 3.83 1.58 4.646 2.73.814-1.148 2.354-2.73 4.645-2.73 2.88 0 5.404 2.69 5.404 5.755 0 6.376-7.454 13.11-10.037 13.157H12zM7.354 4.225c-2.08 0-3.903 1.988-3.903 4.255 0 5.74 7.034 11.596 8.55 11.658 1.518-.062 8.55-5.917 8.55-11.658 0-2.267-1.823-4.255-3.903-4.255-2.528 0-3.94 2.936-3.952 2.965-.23.562-1.156.562-1.387 0-.014-.03-1.425-2.965-3.954-2.965z");
 
-    let container = document.createElement("div");
-    container.className = "IconContainer js-tooltip";
-    container.dataset.originalTitle = chrome.i18n.getMessage("like_thread_title");
-    button.appendChild(container);
+    let path2 = path.cloneNode(true);
+    path.setAttribute("transform", "scale(0.75)");
+    path2.setAttribute("transform", "scale(0.75) translate(6 6)");
+    path.parentNode.appendChild(path2);
 
-    let icon = document.createElement("span");
-    icon.className = "Icon Icon--medium " + (action._set ? "Icon--heartBadge" : "Icon--heart");
-    container.appendChild(icon);
-
-    let icon2 = document.createElement("span");
-    icon2.className = icon.className;
-    icon2.style.position = "relative";
-    icon2.style.left = "-12px";
-    icon2.style.top = "4px";
-    container.appendChild(icon2);
-
-    let favoriteAction = root.querySelector(".ProfileTweet-actionList > .ProfileTweet-action--favorite");
-    favoriteAction.parentNode.insertBefore(action, favoriteAction.nextSibling);
+    template.parentNode.insertBefore(action, template.nextSibling);
   }
 
   new MutationObserver(reportErrors(checkMutations)).observe(body, {
