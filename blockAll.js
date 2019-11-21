@@ -104,6 +104,22 @@
     ids.push(...response.ids);
   }
 
+  params = {
+    stringify_ids: true,
+    cursor: -1
+  };
+  response = await apiCall("blocks/ids", params);
+  let blocked = new Set(response.ids);
+  while (response.next_cursor)
+  {
+    params.cursor = response.next_cursor;
+
+    response = await apiCall("blocks/ids", params);
+    for (let id of response.ids)
+      blocked.add(id);
+  }
+
+  ids = ids.filter(id => !blocked.has(id));
   for (let i = 0; i < ids.length; i += 10)
   {
     let current = ids.slice(i, i + 10);
