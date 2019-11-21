@@ -8,33 +8,106 @@
 
 (async function blockAll()
 {
-  let data = new URLSearchParams();
-  data.set("authenticity_token", document.getElementById("authenticity_token").value);
-  data.set("challenges_passed", "false");
-  data.set("handles_challenges", "1");
-  data.set("impression_id", "");
-
-  for (let profile of document.querySelectorAll(".AppContainer .ProfileCard"))
+  async function fetchToken()
   {
-    let actions = profile.querySelector(".user-actions");
-    if (!actions || actions.classList.contains("blocked"))
+    let mainUrl = null;
+    for (let script of document.body.querySelectorAll("script[src]"))
+      if (/\/main\.[^\/]*\.js$/.test(script.src))
+        mainUrl = script.src;
+    if (!mainUrl)
+      return null;
+
+    let response = await fetch(mainUrl);
+    let mainSource = await response.text();
+    let result = /\"AAAAAAA[^"]+\"/.exec(mainSource);
+    if (!result || result.length != 1)
+      return null;
+
+    return JSON.parse(result[0]);
+  }
+
+  function extractTokenFromCookies()
+  {
+    let cookies = document.cookie;
+    let result = /\bct0=(\w+)/.exec(document.cookie);
+    if (!result)
+      return null;
+
+    return result[1];
+  }
+
+  function* findUsers(node)
+  {
+    if (!node)
+      node = document.getElementById("react-root")._reactRootContainer._internalRoot.current;
+
+    if (node.sibling)
+      yield* findUsers(node.sibling);
+    if (node.child)
+      yield* findUsers(node.child);
+
+    if (!node.stateNode)
+      return;
+
+    let props = node.stateNode.props;
+    if (!props || !props.scribeNamespace)
+      return;
+
+    if (props.scribeNamespace.element != "user")
+      return;
+
+    yield node.stateNode;
+  }
+
+  async function apiCall(endpoint, params, isPost)
+  {
+    let url = "https://api.twitter.com/1.1/" + endpoint + ".json";
+    if (params && !isPost)
+      url += "?" + new URLSearchParams(params).toString();
+
+    let response = await fetch(url, {
+      headers: {
+        "authorization": "Bearer " + token,
+        "x-csrf-token": csrfToken,
+        "x-twitter-active-user": "yes",
+        "x-twitter-auth-type": "OAuth2Session"
+      },
+      method: isPost ? "POST": "GET",
+      body: isPost && params ? new URLSearchParams(params) : null,
+      credentials: "include"
+    });
+    return await response.json();
+  }
+
+  let token = await fetchToken();
+  let csrfToken = extractTokenFromCookies();
+  if (!token || !csrfToken)
+    return;
+
+  let components = new Map();
+  for (let component of findUsers())
+    components.set(component.props.userId, component);
+
+  let screenName = window.location.pathname.split("/")[1];
+  let response = await apiCall("followers/ids", {screen_name: screenName});
+  let followers = response.ids;
+  while (response.next_cursor)
+  {
+    response = await apiCall("followers/ids", {screen_name: screenName, cursor: response.next_cursor});
+    followers.push(...response.ids);
+  }
+
+  for (let id of followers)
+  {
+    let component = components.get(id);
+    if (component && component.props.user.blocked_by)
       continue;
 
-    data.set("user_id", profile.dataset.userId);
-
-    let response = await fetch("/i/user/block", {
-      method: "POST",
-      body: data,
-      headers: {
-        "X-Requested-With": "XMLHttpRequest",
-        "X-Twitter-Active-User": "yes"
-      }
-    });
-
-    if (response.ok)
+    await apiCall("blocks/create", {user_id: id, skip_status: true}, true);
+    if (component)
     {
-      actions.classList.remove("not-following", "following", "pending");
-      actions.classList.add("blocked");
+      component.props.user.blocked_by = true;
+      component.forceUpdate();
     }
   }
 })();

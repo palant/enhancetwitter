@@ -25,11 +25,7 @@ function reportErrors(callback)
 function implementLikeThread()
 {
   const actionClass = "enhancetwitter-favorite-thread";
-
   let action = null;
-  let body = document.getElementById("react-root");
-  if (!body)
-    return;
 
   function isOwnMutation(mutation)
   {
@@ -81,7 +77,7 @@ function implementLikeThread()
     }
   }
 
-  function checkMutations(mutationList)
+  return function checkMutations(mutationList)
   {
     if (mutationList.every(isOwnMutation))
       return;
@@ -122,22 +118,11 @@ function implementLikeThread()
 
     template.parentNode.insertBefore(action, template.nextSibling);
   }
-
-  new MutationObserver(reportErrors(checkMutations)).observe(body, {
-    childList: true,
-    attributes: true,
-    subtree: true
-  });
 }
 
 function implementBlockAll()
 {
-  const actionClass = "ProfileHeading-action--enhanced-block-all";
-
-  let container = document.getElementById("page-container");
-  if (!container)
-    return;
-
+  const actionClass = "enhancetwitter-block-all";
   let action = null;
 
   function injectScript(event)
@@ -153,65 +138,64 @@ function implementBlockAll()
     document.body.removeChild(script);
   }
 
-  function checkMutations(mutationList)
+  return function checkMutations(mutationList)
   {
-    let heading = container.querySelector(".ProfileHeading");
-    if (!heading)
+    let tab = document.querySelector("main nav > [role=tablist] [role=tab][aria-selected=true]");
+    if (!tab)
       return;
 
-    let content = heading;
-    do
-    {
-      content = content.nextElementSibling;
-    } while (content && !content.offsetHeight);
-    if (!content)
+    let profiles = document.querySelectorAll("main section [data-testid=UserCell]");
+    if (profiles.length < 5)
       return;
 
-    let profiles = content.querySelectorAll(".ProfileCard");
-    if (!profiles.length)
-      return;
-
-    for (let existing of heading.querySelectorAll("." + actionClass))
+    for (let existing of document.getElementsByClassName(actionClass))
       if (existing != action)
         existing.parentNode.removeChild(existing);
 
     if (action && action.isConnected)
     {
-      if (action.compareDocumentPosition(heading) & Node.DOCUMENT_POSITION_CONTAINS)
+      if (action.compareDocumentPosition(tab) & Node.DOCUMENT_POSITION_CONTAINS)
         return;
       action.parentNode.removeChild(action);
     }
 
-    action = document.createElement("button");
-    action.className = "plain-btn js-tooltip " + actionClass;
-    action.style.color = "#e0245e";
-    action.dataset.originalTitle = chrome.i18n.getMessage("block_all_title");
+    action = new DOMParser().parseFromString(`
+      <svg viewBox="0 0 24 24">
+        <g>
+          <path transform="scale(0.75)" d="M12 1.25C6.072 1.25 1.25 6.072 1.25 12S6.072 22.75 12 22.75 22.75 17.928 22.75 12 17.928 1.25 12 1.25zm0 1.5c2.28 0 4.368.834 5.982 2.207L4.957 17.982C3.584 16.368 2.75 14.282 2.75 12c0-5.1 4.15-9.25 9.25-9.25zm0 18.5c-2.28 0-4.368-.834-5.982-2.207L19.043 6.018c1.373 1.614 2.207 3.7 2.207 5.982 0 5.1-4.15 9.25-9.25 9.25z" />
+          <path transform="scale(0.75) translate(6 6)" d="M12 1.25C6.072 1.25 1.25 6.072 1.25 12S6.072 22.75 12 22.75 22.75 17.928 22.75 12 17.928 1.25 12 1.25zm0 1.5c2.28 0 4.368.834 5.982 2.207L4.957 17.982C3.584 16.368 2.75 14.282 2.75 12c0-5.1 4.15-9.25 9.25-9.25zm0 18.5c-2.28 0-4.368-.834-5.982-2.207L19.043 6.018c1.373 1.614 2.207 3.7 2.207 5.982 0 5.1-4.15 9.25-9.25 9.25z" />
+        </g>
+      </svg>`, "text/html").body.firstChild;
+    action = document.importNode(action, true);
+    action.classList.add(actionClass);
+    action.style.fill = "#e0245e";
+    action.style.width = "1.5em";
+    action.style.height = "1.5em";
+    action.style.verticalAlign = "middle";
+    action.style.cursor = "pointer";
     action.addEventListener("click", reportErrors(injectScript));
 
-    let icon = document.createElement("span");
-    icon.className = "Icon Icon--medium Icon--report";
-    action.appendChild(icon);
-
-    let icon2 = document.createElement("span");
-    icon2.className = icon.className;
-    icon2.style.position = "relative";
-    icon2.style.left = "-8px";
-    icon2.style.top = "4px";
-    action.appendChild(icon2);
-
-    let parent = heading.querySelector(".ProfileHeading-toggleItem.is-active");
-    if (!parent)
-      parent = heading.querySelector(".ProfileHeading-content");
-    if (!parent)
-      parent = heading;
-    parent.insertBefore(action, parent.firstChild);
+    (tab.firstElementChild.localName == "div" ? tab.firstElementChild : tab).appendChild(action);
   }
-
-  new MutationObserver(reportErrors(checkMutations)).observe(container, {
-    childList: true
-  });
-  checkMutations();
 }
 
-implementLikeThread();
-implementBlockAll();
+let mutationListeners = [
+  implementLikeThread(),
+  implementBlockAll()
+];
+
+function checkMutations(mutationList)
+{
+  for (let listener of mutationListeners)
+    listener(mutationList);
+}
+
+let root = document.getElementById("react-root");
+if (root)
+{
+  new MutationObserver(reportErrors(checkMutations)).observe(root, {
+    childList: true,
+    attributes: true,
+    subtree: true
+  });
+}
