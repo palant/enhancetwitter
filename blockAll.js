@@ -90,24 +90,37 @@
 
   let screenName = window.location.pathname.split("/")[1];
   let response = await apiCall("followers/ids", {screen_name: screenName});
-  let followers = response.ids;
+  let ids = response.ids;
   while (response.next_cursor)
   {
-    response = await apiCall("followers/ids", {screen_name: screenName, cursor: response.next_cursor});
-    followers.push(...response.ids);
+    response = await apiCall("followers/ids", {
+      screen_name: screenName,
+      count: 5000,
+      cursor: response.next_cursor
+    });
+    ids.push(...response.ids);
   }
 
-  for (let id of followers)
+  let followers = [];
+  for (let i = 0; i < ids.length; i += 100)
   {
-    let component = components.get(id);
-    if (component && component.props.user.blocked_by)
-      continue;
-
-    await apiCall("blocks/create", {user_id: id, skip_status: true}, true);
-    if (component)
+    let users = await apiCall("users/lookup", {
+      user_id: ids.slice(i, i + 100).join(",")
+    });
+    for (let j = 0; j < users.length; j += 10)
     {
-      component.props.user.blocked_by = true;
-      component.forceUpdate();
+      let calls = users.slice(j, j + 10).map(user => apiCall("blocks/create", {user_id: user.id, skip_status: true}, true));
+      await Promise.all(calls);
+
+      for (let user of users.slice(j, j + 10))
+      {
+        let component = components.get(user.id);
+        if (component)
+        {
+          component.props.user.blocked_by = true;
+          component.forceUpdate();
+        }
+      }
     }
   }
 })();
