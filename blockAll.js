@@ -50,7 +50,7 @@
       return;
 
     let props = node.stateNode.props;
-    if (!props || !props.scribeNamespace)
+    if (!props || !("follow" in props) || !props.scribeNamespace)
       return;
 
     if (props.scribeNamespace.element != "user")
@@ -131,7 +131,7 @@
       let component = components.get(id);
       if (component)
       {
-        component.props.user.blocked_by = true;
+        component.props.user.blocking = true;
         component.forceUpdate();
       }
     }
