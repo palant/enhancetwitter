@@ -89,37 +89,34 @@
     components.set(component.props.userId, component);
 
   let screenName = window.location.pathname.split("/")[1];
-  let response = await apiCall("followers/ids", {screen_name: screenName});
+  let params = {
+    screen_name: screenName,
+    stringify_ids: true,
+    count: 5000,
+  };
+  let response = await apiCall("followers/ids", params);
   let ids = response.ids;
   while (response.next_cursor)
   {
-    response = await apiCall("followers/ids", {
-      screen_name: screenName,
-      count: 5000,
-      cursor: response.next_cursor
-    });
+    params.cursor = response.next_cursor;
+
+    response = await apiCall("followers/ids", params);
     ids.push(...response.ids);
   }
 
-  let followers = [];
-  for (let i = 0; i < ids.length; i += 100)
+  for (let i = 0; i < ids.length; i += 10)
   {
-    let users = await apiCall("users/lookup", {
-      user_id: ids.slice(i, i + 100).join(",")
-    });
-    for (let j = 0; j < users.length; j += 10)
-    {
-      let calls = users.slice(j, j + 10).map(user => apiCall("blocks/create", {user_id: user.id, skip_status: true}, true));
-      await Promise.all(calls);
+    let current = ids.slice(i, i + 10);
+    let calls = current.map(id => apiCall("blocks/create", {user_id: id, skip_status: true}, true));
+    await Promise.all(calls);
 
-      for (let user of users.slice(j, j + 10))
+    for (let id of current)
+    {
+      let component = components.get(id);
+      if (component)
       {
-        let component = components.get(user.id);
-        if (component)
-        {
-          component.props.user.blocked_by = true;
-          component.forceUpdate();
-        }
+        component.props.user.blocked_by = true;
+        component.forceUpdate();
       }
     }
   }
