@@ -59,81 +59,93 @@
     yield node.stateNode;
   }
 
-  async function apiCall(endpoint, params, isPost)
+  let action = document.querySelector(".enhancetwitter-block-all");
+  if (action)
+    action.style.animation = "rotation 1s infinite linear";
+
+  try
   {
-    let url = "https://api.twitter.com/1.1/" + endpoint + ".json";
-    if (params && !isPost)
-      url += "?" + new URLSearchParams(params).toString();
-
-    let response = await fetch(url, {
-      headers: {
-        "authorization": "Bearer " + token,
-        "x-csrf-token": csrfToken,
-        "x-twitter-active-user": "yes",
-        "x-twitter-auth-type": "OAuth2Session"
-      },
-      method: isPost ? "POST": "GET",
-      body: isPost && params ? new URLSearchParams(params) : null,
-      credentials: "include"
-    });
-    return await response.json();
-  }
-
-  let token = await fetchToken();
-  let csrfToken = extractTokenFromCookies();
-  if (!token || !csrfToken)
-    return;
-
-  let components = new Map();
-  for (let component of findUsers())
-    components.set(component.props.userId, component);
-
-  let screenName = window.location.pathname.split("/")[1];
-  let params = {
-    screen_name: screenName,
-    stringify_ids: true,
-    count: 5000,
-  };
-  let response = await apiCall("followers/ids", params);
-  let ids = response.ids;
-  while (response.next_cursor)
-  {
-    params.cursor = response.next_cursor;
-
-    response = await apiCall("followers/ids", params);
-    ids.push(...response.ids);
-  }
-
-  params = {
-    stringify_ids: true,
-    cursor: -1
-  };
-  response = await apiCall("blocks/ids", params);
-  let blocked = new Set(response.ids);
-  while (response.next_cursor)
-  {
-    params.cursor = response.next_cursor;
-
-    response = await apiCall("blocks/ids", params);
-    for (let id of response.ids)
-      blocked.add(id);
-  }
-
-  ids = ids.filter(id => !blocked.has(id));
-  for (let i = 0; i < ids.length; i += 10)
-  {
-    let current = ids.slice(i, i + 10);
-    let calls = current.map(id => apiCall("blocks/create", {user_id: id, skip_status: true}, true));
-    await Promise.all(calls);
-
-    for (let id of current)
+    async function apiCall(endpoint, params, isPost)
     {
-      let component = components.get(id);
-      if (component)
+      let url = "https://api.twitter.com/1.1/" + endpoint + ".json";
+      if (params && !isPost)
+        url += "?" + new URLSearchParams(params).toString();
+
+      let response = await fetch(url, {
+        headers: {
+          "authorization": "Bearer " + token,
+          "x-csrf-token": csrfToken,
+          "x-twitter-active-user": "yes",
+          "x-twitter-auth-type": "OAuth2Session"
+        },
+        method: isPost ? "POST": "GET",
+        body: isPost && params ? new URLSearchParams(params) : null,
+        credentials: "include"
+      });
+      return await response.json();
+    }
+
+    let token = await fetchToken();
+    let csrfToken = extractTokenFromCookies();
+    if (!token || !csrfToken)
+      return;
+
+    let components = new Map();
+    for (let component of findUsers())
+      components.set(component.props.userId, component);
+
+    let screenName = window.location.pathname.split("/")[1];
+    let params = {
+      screen_name: screenName,
+      stringify_ids: true,
+      count: 5000,
+    };
+    let response = await apiCall("followers/ids", params);
+    let ids = response.ids;
+    while (response.next_cursor)
+    {
+      params.cursor = response.next_cursor;
+
+      response = await apiCall("followers/ids", params);
+      ids.push(...response.ids);
+    }
+
+    params = {
+      stringify_ids: true,
+      cursor: -1
+    };
+    response = await apiCall("blocks/ids", params);
+    let blocked = new Set(response.ids);
+    while (response.next_cursor)
+    {
+      params.cursor = response.next_cursor;
+
+      response = await apiCall("blocks/ids", params);
+      for (let id of response.ids)
+        blocked.add(id);
+    }
+
+    ids = ids.filter(id => !blocked.has(id));
+    for (let i = 0; i < ids.length; i += 10)
+    {
+      let current = ids.slice(i, i + 10);
+      let calls = current.map(id => apiCall("blocks/create", {user_id: id, skip_status: true}, true));
+      await Promise.all(calls);
+
+      for (let id of current)
       {
-        component.props.user.blocking = true;
-        component.forceUpdate();
+        let component = components.get(id);
+        if (component)
+        {
+          component.props.user.blocking = true;
+          component.forceUpdate();
+        }
       }
     }
+  }
+  finally
+  {
+    if (action)
+      action.style.animation = "";
   }
 })();

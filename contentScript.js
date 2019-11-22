@@ -127,8 +127,6 @@ function implementBlockAll()
 
   function injectScript(event)
   {
-    event.preventDefault();
-
     // Firefox doesn't execute content script requests with the page's Origin
     // header, so we need to inject this into the page.
     let script = document.createElement("script");
@@ -161,6 +159,16 @@ function implementBlockAll()
 
     action = new DOMParser().parseFromString(`
       <svg viewBox="0 0 24 24">
+        <style>
+          @keyframes rotation {
+            from {
+              transform: rotate(0deg);
+            }
+            to {
+              transform: rotate(359deg);
+            }
+          }
+        </style>
         <g>
           <path transform="scale(0.75)" d="M12 1.25C6.072 1.25 1.25 6.072 1.25 12S6.072 22.75 12 22.75 22.75 17.928 22.75 12 17.928 1.25 12 1.25zm0 1.5c2.28 0 4.368.834 5.982 2.207L4.957 17.982C3.584 16.368 2.75 14.282 2.75 12c0-5.1 4.15-9.25 9.25-9.25zm0 18.5c-2.28 0-4.368-.834-5.982-2.207L19.043 6.018c1.373 1.614 2.207 3.7 2.207 5.982 0 5.1-4.15 9.25-9.25 9.25z" />
           <path transform="scale(0.75) translate(6 6)" d="M12 1.25C6.072 1.25 1.25 6.072 1.25 12S6.072 22.75 12 22.75 22.75 17.928 22.75 12 17.928 1.25 12 1.25zm0 1.5c2.28 0 4.368.834 5.982 2.207L4.957 17.982C3.584 16.368 2.75 14.282 2.75 12c0-5.1 4.15-9.25 9.25-9.25zm0 18.5c-2.28 0-4.368-.834-5.982-2.207L19.043 6.018c1.373 1.614 2.207 3.7 2.207 5.982 0 5.1-4.15 9.25-9.25 9.25z" />
@@ -173,7 +181,13 @@ function implementBlockAll()
     action.style.height = "1.5em";
     action.style.verticalAlign = "middle";
     action.style.cursor = "pointer";
-    action.addEventListener("click", reportErrors(injectScript));
+    action.addEventListener("click", reportErrors(event =>
+    {
+      event.preventDefault();
+
+      if (!action.style.animation)
+        injectScript();
+    }));
 
     (tab.firstElementChild.localName == "div" ? tab.firstElementChild : tab).appendChild(action);
   }
