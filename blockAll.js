@@ -8,6 +8,14 @@
 
 (async function blockAll()
 {
+  function extractId()
+  {
+    let match = /\/status\/(\d+)/.exec(location.href);
+    if (!match)
+      return null;
+    return match[1];
+  }
+
   async function fetchToken()
   {
     let mainUrl = null;
@@ -36,29 +44,6 @@
     return result[1];
   }
 
-  function* findUsers(node)
-  {
-    if (!node)
-      node = document.getElementById("react-root")._reactRootContainer._internalRoot.current;
-
-    if (node.sibling)
-      yield* findUsers(node.sibling);
-    if (node.child)
-      yield* findUsers(node.child);
-
-    if (!node.stateNode)
-      return;
-
-    let props = node.stateNode.props;
-    if (!props || !("follow" in props) || !props.scribeNamespace)
-      return;
-
-    if (props.scribeNamespace.element != "user")
-      return;
-
-    yield node.stateNode;
-  }
-
   let action = document.querySelector(".enhancetwitter-block-all");
   if (action)
     action.style.animation = "rotation 1s infinite linear";
@@ -67,7 +52,7 @@
   {
     async function apiCall(endpoint, params, isPost)
     {
-      let url = "https://api.twitter.com/1.1/" + endpoint + ".json";
+      let url = "https://api.twitter.com/" + endpoint + ".json";
       if (params && !isPost)
         url += "?" + new URLSearchParams(params).toString();
 
@@ -85,62 +70,26 @@
       return await response.json();
     }
 
+    let id = extractId();
     let token = await fetchToken();
     let csrfToken = extractTokenFromCookies();
-    if (!token || !csrfToken)
+    if (!id || !token || !csrfToken)
       return;
 
-    let components = new Map();
-    for (let component of findUsers())
-      components.set(component.props.userId, component);
+    let response = await apiCall("2/timeline/liked_by", {
+      include_blocking: 1,
+      skip_status: 1,
+      send_error_codes: true,
+      tweet_id: id,
+      count: 1000
+    });
+    let users = Object.keys(response.globalObjects.users);
 
-    let screenName = window.location.pathname.split("/")[1];
-    let params = {
-      screen_name: screenName,
-      stringify_ids: true,
-      count: 5000,
-    };
-    let response = await apiCall("followers/ids", params);
-    let ids = response.ids;
-    while (response.next_cursor)
+    for (let i = 0; i < users.length; i += 10)
     {
-      params.cursor = response.next_cursor;
-
-      response = await apiCall("followers/ids", params);
-      ids.push(...response.ids);
-    }
-
-    params = {
-      stringify_ids: true,
-      cursor: -1
-    };
-    response = await apiCall("blocks/ids", params);
-    let blocked = new Set(response.ids);
-    while (response.next_cursor)
-    {
-      params.cursor = response.next_cursor;
-
-      response = await apiCall("blocks/ids", params);
-      for (let id of response.ids)
-        blocked.add(id);
-    }
-
-    ids = ids.filter(id => !blocked.has(id));
-    for (let i = 0; i < ids.length; i += 10)
-    {
-      let current = ids.slice(i, i + 10);
-      let calls = current.map(id => apiCall("blocks/create", {user_id: id, skip_status: true}, true));
+      let current = users.slice(i, i + 10);
+      let calls = current.map(id => apiCall("1.1/blocks/create", {user_id: id, skip_status: true}, true));
       await Promise.all(calls);
-
-      for (let id of current)
-      {
-        let component = components.get(id);
-        if (component)
-        {
-          component.props.user.blocking = true;
-          component.forceUpdate();
-        }
-      }
     }
   }
   finally

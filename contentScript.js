@@ -45,7 +45,11 @@ function implementLikeThread()
 
   function getUsername(tweet)
   {
-    return tweet.querySelector("a").getAttribute("href").replace(/^\//, "");
+    let username = tweet.querySelector("a");
+    if (username)
+      return username.getAttribute("href").replace(/^\//, "");
+    else
+      return null;
   }
 
   function* selectThread()
@@ -138,21 +142,17 @@ function implementBlockAll()
 
   return function checkMutations(mutationList)
   {
-    let tab = document.querySelector("main nav > [role=tablist] [role=tab][aria-selected=true]");
-    if (!tab)
+    let modal = document.querySelector("#layers [aria-modal=true]");
+    if (!modal)
       return;
 
-    let profiles = document.querySelectorAll("main section [data-testid=UserCell]");
-    if (profiles.length < 5)
+    let header = modal.querySelector("#modal-header");
+    if (!header || header.textContent != "Liked by")
       return;
-
-    for (let existing of document.getElementsByClassName(actionClass))
-      if (existing != action)
-        existing.parentNode.removeChild(existing);
 
     if (action && action.isConnected)
     {
-      if (action.compareDocumentPosition(tab) & Node.DOCUMENT_POSITION_CONTAINS)
+      if (action.compareDocumentPosition(header) & Node.DOCUMENT_POSITION_CONTAINS)
         return;
       action.parentNode.removeChild(action);
     }
@@ -189,7 +189,7 @@ function implementBlockAll()
         injectScript();
     }));
 
-    (tab.firstElementChild.localName == "div" ? tab.firstElementChild : tab).appendChild(action);
+    header.appendChild(action);
   }
 }
 
